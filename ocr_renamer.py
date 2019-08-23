@@ -1,4 +1,6 @@
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image
+from rawkit.raw import Raw
+import numpy as np
 import pytesseract
 import os
 
@@ -21,9 +23,11 @@ def check_string(string):
 
 directory = (os.getcwd())
 for filename in os.listdir(directory): #iterate over every file
-    if filename.endswith('.jpg'): #check for the extension of the file
+    if filename.endswith('.CR2'): #check for the extension of the file
         print("Looking at file: " + filename)
-        img=Image.open(filename)
+        raw_image = Raw(filename)
+        buffered_image = np.array(raw_image.to_buffer())
+        img = Image.frombytes('RGB', (raw_image.metadata.width, raw_image.metadata.height), buffered_image)
         change = 0
         for basewidth in range(600,1601,50): # Try a few different image resizes until OCR detects a long enough string
             ## Code to resize the image while keeping aspect ratio - so that OCR can be more accurate
