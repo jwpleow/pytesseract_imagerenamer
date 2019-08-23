@@ -10,12 +10,12 @@ def check_string(string):
         test = 0
     if not string[7:15].isdigit(): #check if last 8 characters are digit
         test = 0
-    if not string[0:3].isalpha():
+    if not string[0:3].isalpha(): #check if first 3 characters are alphabets
         test = 0
     if string[3] != '_':
         test = 0
-    if not string[4:7].isalpha():
-	    test = 0
+    if not string[4:7].isalpha(): #check if 4-6th digits are alphabets
+        test = 0
     return test
 
 
@@ -24,9 +24,9 @@ for filename in os.listdir(directory): #iterate over every file
     if filename.endswith('.jpg'): #check for the extension of the file
         print("Looking at file: " + filename)
         img=Image.open(filename)
-        for basewidth in range(600,1401,100): # Try a few different image resizes until OCR detects a long enough string
+        change = 0
+        for basewidth in range(600,1601,50): # Try a few different image resizes until OCR detects a long enough string
             ## Code to resize the image while keeping aspect ratio - so that OCR can be more accurate
-            change = 0
             wpercent = (basewidth/float(img.size[0]))
             hsize = int((float(img.size[1])*float(wpercent)))
             img = img.resize((basewidth,hsize), Image.ANTIALIAS)
