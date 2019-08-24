@@ -1,35 +1,36 @@
 from PIL import Image
-from rawkit.raw import Raw
-import numpy as np
 import pytesseract
 import os
+import rawpy
 
-# print(pytesseract.image_to_data('test.jpg'))
+### Modify the variables here ###
+FileExtension = ".CR2"
 
+
+### String parameters that must be fulfilled
 def check_string(string):
-    test = 1
     if len(string) != 15: #check if string length is correct
-        test = 0
+        return 0
     if not string[7:15].isdigit(): #check if last 8 characters are digit
-        test = 0
+        return 0
     if not string[0:3].isalpha(): #check if first 3 characters are alphabets
-        test = 0
+        return 0
     if string[3] != '_':
-        test = 0
+        return 0
     if not string[4:7].isalpha(): #check if 4-6th digits are alphabets
-        test = 0
-    return test
+        return 0
+    return 1
 
 
 directory = (os.getcwd())
 for filename in os.listdir(directory): #iterate over every file
-    if filename.endswith('.CR2'): #check for the extension of the file
-        print("Looking at file: " + filename)
-        raw_image = Raw(filename)
-        buffered_image = np.array(raw_image.to_buffer())
-        img = Image.frombytes('RGB', (raw_image.metadata.width, raw_image.metadata.height), buffered_image)
+    if filename.endswith(FileExtension): #check for the extension of the file
+        print("Looking at file: " + filename, flush=True)
+        with rawpy.imread(filename) as raw_image: #with so that the file is closed after reading
+            rgb = raw_image.postprocess()
+        img = Image.fromarray(rgb)
         change = 0
-        for basewidth in range(600,1601,50): # Try a few different image resizes until OCR detects a long enough string
+        for basewidth in range(600,1601,100): # Try a few different image resizes until OCR detects a long enough string
             ## Code to resize the image while keeping aspect ratio - so that OCR can be more accurate
             wpercent = (basewidth/float(img.size[0]))
             hsize = int((float(img.size[1])*float(wpercent)))
@@ -39,12 +40,12 @@ for filename in os.listdir(directory): #iterate over every file
             longesttext=max(imgtextlist, key=len) #Grab the longest string
             if check_string(longesttext): #If longer than 13 characters, and no O or o, accept the string and use to rename file
                 try:
-                    os.rename(filename, longesttext + ".jpg")
-                    print("Renaming file to: " + longesttext + ".jpg")
+                    os.rename(filename, longesttext + FileExtension)
+                    print("Renaming file to: " + longesttext + FileExtension, flush=True)
                 except FileExistsError:
-                    os.rename(filename, longesttext + "(1).jpg")
-                    print("Renaming file to: " + longesttext + "(1).jpg")
+                    os.rename(filename, longesttext + "(1)" + FileExtension)
+                    print("Renaming file to: " + longesttext + "(1)" + FileExtension, flush=True)
                 change = 1
                 break
         if change == 0:
-            print("Unable to find the text for file: " + filename)
+            print("Unable to find the text for file: " + filename, flush=True)
