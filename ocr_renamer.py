@@ -23,7 +23,7 @@ def check_string(string):
 
 
 directory = (os.getcwd())
-for filename in os.listdir(directory): #iterate over every file
+for filename in sorted(os.listdir(directory)): #iterate over every file
     if filename.endswith(FileExtension): #check for the extension of the file
         print("Looking at file: " + filename, flush=True)
         with rawpy.imread(filename) as raw_image: #with so that the file is closed after reading
@@ -39,12 +39,15 @@ for filename in os.listdir(directory): #iterate over every file
             imgtextlist=pytesseract.image_to_string(img).split('\n') #Get data output and split into list
             longesttext=max(imgtextlist, key=len) #Grab the longest string
             if check_string(longesttext): #If longer than 13 characters, and no O or o, accept the string and use to rename file
-                try:
+                if not (longesttext + FileExtension) in os.listdir(directory):
                     os.rename(filename, longesttext + FileExtension)
                     print("Renaming file to: " + longesttext + FileExtension, flush=True)
-                except FileExistsError:
-                    os.rename(filename, longesttext + "(1)" + FileExtension)
-                    print("Renaming file to: " + longesttext + "(1)" + FileExtension, flush=True)
+                else:
+                    n = 1
+                    while (longesttext + ' (' + str(n) + ')' + FileExtension) in os.listdir(directory):
+                        n += 1
+                    os.rename(filename, longesttext + ' (' + str(n) + ')'+ FileExtension)
+                    print("Renaming file to: " + longesttext + ' (' + str(n) + ')' + FileExtension, flush=True)
                 change = 1
                 break
         if change == 0:
