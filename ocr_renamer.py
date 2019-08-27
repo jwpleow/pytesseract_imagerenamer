@@ -30,24 +30,25 @@ for filename in sorted(os.listdir(directory)): #iterate over every file
             rgb = raw_image.postprocess()
         img = Image.fromarray(rgb)
         change = 0
-        for basewidth in range(600,1601,100): # Try a few different image resizes until OCR detects a long enough string
+        for basewidth in range(600,2801,100): # Try a few different image resizes until OCR detects a long enough string
             ## Code to resize the image while keeping aspect ratio - so that OCR can be more accurate
             wpercent = (basewidth/float(img.size[0]))
             hsize = int((float(img.size[1])*float(wpercent)))
             img = img.resize((basewidth,hsize), Image.ANTIALIAS)
             ## End resize
-            imgtextlist=pytesseract.image_to_string(img).split('\n') #Get data output and split into list
-            longesttext=max(imgtextlist, key=len) #Grab the longest string
+            imgtextlist=pytesseract.image_to_string(img,config='--psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789').split('\n') #Get data output and split into list
+            longesttext=max((max(imgtextlist, key=len)).split(' '), key=len) #Grab the longest string and split any whitespaces
+            # print(str(basewidth) + " result is: " + str(imgtextlist))
             if check_string(longesttext): #If longer than 13 characters, and no O or o, accept the string and use to rename file
-                if not (longesttext + FileExtension) in os.listdir(directory):
-                    os.rename(filename, longesttext + FileExtension)
-                    print("Renaming file to: " + longesttext + FileExtension, flush=True)
+                if not (longesttext + ' A' + FileExtension) in os.listdir(directory):
+                    os.rename(filename, longesttext + ' A' + FileExtension)
+                    print("Renaming file to: " + longesttext + ' A' + FileExtension, flush=True)
                 else:
                     n = 1
-                    while (longesttext + ' (' + str(n) + ')' + FileExtension) in os.listdir(directory):
+                    while (longesttext + ' A(' + str(n) + ')' + FileExtension) in os.listdir(directory):
                         n += 1
-                    os.rename(filename, longesttext + ' (' + str(n) + ')'+ FileExtension)
-                    print("Renaming file to: " + longesttext + ' (' + str(n) + ')' + FileExtension, flush=True)
+                    os.rename(filename, longesttext + ' A(' + str(n) + ')'+ FileExtension)
+                    print("Renaming file to: " + longesttext + ' A(' + str(n) + ')' + FileExtension, flush=True)
                 change = 1
                 break
         if change == 0:
