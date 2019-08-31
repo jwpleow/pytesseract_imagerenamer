@@ -1,16 +1,20 @@
 # pytesseract
 Image renamer using Tesseract OCR
 
-Reads the longest string in the list of words (delimited by '\n') found in the image and uses it to rename the image
+Finds the relevant string in the image and uses it to rename the image  
 
-### Dependencies
+(Written to help label a butterfly collection)  
+
+### How to use
+Download [Anaconda](https://www.anaconda.com/distribution/)
+In your preferred shell/terminal/virtualenv:
 ```
 pip install rawpy
 pip install pytesseract
 ```
 Install the [Tesseract Engine](https://github.com/tesseract-ocr/tesseract/wiki) (and add the directory to PATH if on Windows)
 
-Place the python script in the directory with all the image files, and run it:
+Place the python script in the directory with the image files, and run it:
 ```
 python ocr_renamer.py
 ```
