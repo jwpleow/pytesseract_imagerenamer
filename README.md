@@ -6,7 +6,7 @@ Finds the relevant string in the image and uses it to rename the image
 (Written to help label a butterfly collection)  
 
 ### How to use
-Download [Anaconda](https://www.anaconda.com/distribution/)
+Download [Anaconda](https://www.anaconda.com/distribution/)  
 In your preferred shell/terminal/virtualenv:
 ```
 pip install rawpy
