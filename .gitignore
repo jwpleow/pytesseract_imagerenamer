@@ -1,6 +1,6 @@
 **
 
-!*.py
+!ocr_renamer.py
 !.gitignore
 !README.md 
 !Templates/

@@ -11,6 +11,7 @@ In your preferred shell/terminal/virtualenv:
 ```
 pip install rawpy
 pip install pytesseract
+pip install opencv-python
 ```
 Install the [Tesseract Engine](https://github.com/tesseract-ocr/tesseract/wiki) (and add the directory to PATH if on Windows)
 
