@@ -39,7 +39,7 @@ def filter_text(imgtext):
         return None
 
 
-def rename_img(text, dorsal_ventral):
+def rename_img(filename, text, dorsal_ventral):
     """" This function renames the image to its label + A<number> """
 
     if not (f"{text} {dorsal_ventral}{FileExtension}") in os.listdir(os.getcwd()): #check if new file name already exists
@@ -100,15 +100,15 @@ for filename in sorted(os.listdir(directory)): #iterate over every file
         text_found = 0
         for width in range(600,2501,100): # Try a few different image sizes until OCR detects a long enough string
             img_resized = resize_img(img, width)
-            img_for_pytesseract = Image.fromarray(img_resized) # PyTesseract only seems to accept PIL image formats?
-            imgtext=pytesseract.image_to_string(img_for_pytesseract, config='--psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') #Get data output and split into list
+            # PyTesseract only seems to accept PIL image formats
+            imgtext=pytesseract.image_to_string(Image.fromarray(img_resized), config='--psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') #Get data output and split into list
             log.debug(f"For the {width}-width image, text read is: \n {imgtext}")
             text = filter_text(imgtext)
             if text: 
                 text_found = 1
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) # convert to grayscale for template matching
                 result = match_template(gray) # use openCV template to find if dorsal or ventral
-                rename_img(text, result)
+                rename_img(filename, text, result)
                 break
         if text_found == 0:
             unrenamed_files.append(filename)
@@ -127,15 +127,15 @@ if unrenamed_files:
             for width in range(600,3051,50): # Try more
                 if width % 100 != 0 or width > 2401: #only perform for sizes not already tried
                     img_resized = resize_img(img, width)
-                    img_for_pytesseract = Image.fromarray(img_resized) # PyTesseract only seems to accept PIL image formats?
-                    imgtext=pytesseract.image_to_string(img_for_pytesseract, config='--psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') #Get data output and split into list
+                    # PyTesseract only seems to accept PIL image formats?
+                    imgtext=pytesseract.image_to_string(Image.fromarray(img_resized), config='--psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') #Get data output and split into list
                     log.debug(f"For the {width}-width image, text read is: \n {imgtext}")
                     text = filter_text(imgtext)
                     if text: 
                         text_found = 1
                         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) # convert to grayscale for template matching
                         result = match_template(gray) # use openCV template to find if dorsal or ventral
-                        rename_img(text, result)
+                        rename_img(filename, text, result)
                         break
                         
                 # ## Using a different config on pytesseract seems to cause no output suddenly?? (or was this already the case?) Find out why
