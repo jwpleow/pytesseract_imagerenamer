@@ -7,7 +7,7 @@ import logging
 import time
 import cv2 #pip install opencv-python
 import numpy as np
-from multiprocessing import RLock, Pool, Manager, Process
+from multiprocessing import Lock, Pool, Manager, Process, RLock
 
 # logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger(__name__)
@@ -23,7 +23,6 @@ template_V = cv2.imread('Templates/V.png', 0)
 
 # setup some stuff
 directory = (os.getcwd())
-lock = RLock()
 
 # unrenamed_files = manager.list()  
 
@@ -45,15 +44,12 @@ def filter_text(imgtext):
     else:
         return None
 
-def append_string(manager_list, string):
-    manager_list.append(string)
+# def append_string(manager_list, string):
+#     manager_list.append(string)
 
 
 def rename_img(text, dorsal_ventral):
     """" This function renames the image to its label + D/V/A + <number if filename is taken> """
-    global lock
-    lock.acquire()
-    print("Lock acquired!",flush=True)
     if not (f"{text} {dorsal_ventral}{FileExtension}") in os.listdir(os.getcwd()): #check if new file name already exists
         os.rename(filename, f"{text} {dorsal_ventral}{FileExtension}")
         print(f"Renaming file to: {text} {dorsal_ventral}{FileExtension}", flush=True)
@@ -63,8 +59,6 @@ def rename_img(text, dorsal_ventral):
             n += 1
         os.rename(filename, f"{text} {dorsal_ventral}({n}){FileExtension}")
         print(f"Renaming file to: {text} {dorsal_ventral}({n}){FileExtension}", flush=True)
-    print("Releasing Lock!",flush=True)
-    lock.release()
     return
 
 def resize_img(img, new_width):
@@ -77,16 +71,16 @@ def match_template(img):
     """ This function tries to match the D or V template images with the img input, 
     and returns either a 'D' or 'V' if either match, else returns 'A'
     """
-    global lock
-    lock.acquire()
-    print("Lock Acquired",flush=True)
+    
     flag_D = False
     flag_V = False
     ret = ""
     global template_D
     global template_V
+    print("matching templates inside", flush=True)
     res_D = cv2.matchTemplate(img, template_D, cv2.TM_CCOEFF_NORMED)
     res_V = cv2.matchTemplate(img, template_V, cv2.TM_CCOEFF_NORMED)
+    print("templates matched!", flush=True)
     # print(f"res_D: {np.amax(res_D)}, res_V:{np.amax(res_V)}",flush=True)
     if np.amax(res_D) > threshold:
         flag_D = True
@@ -103,11 +97,11 @@ def match_template(img):
     else:
         print("Neither D nor V was detected!")
         ret = "A"
-    print("Releasing Lock",flush=True)
-    lock.release()
+    
     return ret
 
 def process_image(filename):
+    global lock
     print(f"Looking at file: {filename}", flush=True)
     with rawpy.imread(filename) as raw_image: #with so that the file is closed after reading
         rgb = raw_image.postprocess() # return a numpy array
@@ -122,8 +116,13 @@ def process_image(filename):
         if text: 
             text_found = 1
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) # convert to grayscale for template matching
+            lock.acquire()
+            print("Lock acquired!",flush=True)
             result = match_template(gray) # use openCV template to find if dorsal or ventral
+            print("Result found!", flush=True)
             rename_img(text, result)
+            print("Releasing Lock",flush=True)
+            lock.release()
             break
     if text_found == 0:
         # unrenamed_files.append(filename)
@@ -160,11 +159,15 @@ def process_image_finer(filename):
     if text_found == 0:
         print("Still unable to find the text for file: " + filename, flush=True)
 
+def init(l):
+    global lock
+    lock = l
+
 if __name__ == '__main__':
     start = time.time()
-    
+    l = RLock()
     files = [filename for filename in sorted(os.listdir(directory)) if filename.endswith(FileExtension)]
-    pool = Pool()
+    pool = Pool(initializer=init, initargs=(l,))
     
     manager = Manager()
     pool.map(process_image, files)
