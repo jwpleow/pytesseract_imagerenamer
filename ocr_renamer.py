@@ -48,7 +48,8 @@ def filter_text(imgtext):
 #     manager_list.append(string)
 
 
-def rename_img(text, dorsal_ventral):
+def rename_img(filename, text, dorsal_ventral):
+    global FileExtension
     """" This function renames the image to its label + D/V/A + <number if filename is taken> """
     if not (f"{text} {dorsal_ventral}{FileExtension}") in os.listdir(os.getcwd()): #check if new file name already exists
         os.rename(filename, f"{text} {dorsal_ventral}{FileExtension}")
@@ -71,17 +72,13 @@ def match_template(img):
     """ This function tries to match the D or V template images with the img input, 
     and returns either a 'D' or 'V' if either match, else returns 'A'
     """
-    
     flag_D = False
     flag_V = False
     ret = ""
     global template_D
     global template_V
-    print("matching templates inside", flush=True)
     res_D = cv2.matchTemplate(img, template_D, cv2.TM_CCOEFF_NORMED)
     res_V = cv2.matchTemplate(img, template_V, cv2.TM_CCOEFF_NORMED)
-    print("templates matched!", flush=True)
-    # print(f"res_D: {np.amax(res_D)}, res_V:{np.amax(res_V)}",flush=True)
     if np.amax(res_D) > threshold:
         flag_D = True
     if np.amax(res_V) > threshold:
@@ -101,7 +98,6 @@ def match_template(img):
     return ret
 
 def process_image(filename):
-    global lock
     print(f"Looking at file: {filename}", flush=True)
     with rawpy.imread(filename) as raw_image: #with so that the file is closed after reading
         rgb = raw_image.postprocess() # return a numpy array
@@ -109,19 +105,17 @@ def process_image(filename):
     text_found = 0
     for width in range(600,2501,100): # Try a few different image sizes until OCR detects a long enough string
         img_resized = resize_img(img, width)
-        img_for_pytesseract = Image.fromarray(img_resized) # PyTesseract only seems to accept PIL image formats?
-        imgtext=pytesseract.image_to_string(img_for_pytesseract, config='--psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') #Get data output and split into list
-        log.debug(f"For the {width}-width image, text read is: \n {imgtext}")
+        # PyTesseract only seems to accept PIL image formats
+        imgtext=pytesseract.image_to_string(Image.fromarray(img_resized), config='--psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') #Get data output and split into list
         text = filter_text(imgtext)
         if text: 
             text_found = 1
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) # convert to grayscale for template matching
-            lock.acquire()
-            print("Lock acquired!",flush=True)
             result = match_template(gray) # use openCV template to find if dorsal or ventral
-            print("Result found!", flush=True)
-            rename_img(text, result)
-            print("Releasing Lock",flush=True)
+            lock.acquire()
+            # print("Lock acquired!",flush=True)
+            rename_img(filename, text, result)
+            # print("Releasing Lock",flush=True)
             lock.release()
             break
     if text_found == 0:
@@ -145,7 +139,7 @@ def process_image_finer(filename):
                 text_found = 1
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) # convert to grayscale for template matching
                 result = match_template(gray) # use openCV template to find if dorsal or ventral
-                rename_img(text, result)
+                rename_img(filename, text, result)
                 break
                 
         # ## Using a different config on pytesseract seems to cause no output suddenly?? (or was this already the case?) Find out why
