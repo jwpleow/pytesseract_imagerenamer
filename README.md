@@ -7,11 +7,9 @@ Finds the relevant string in the image and uses it to rename the image
 
 ### How to use
 Download [Anaconda](https://www.anaconda.com/distribution/)  
-In your preferred shell/terminal/virtualenv:
+In your preferred shell/terminal:
 ```
-pip install rawpy
-pip install pytesseract
-pip install opencv-python
+pip install rawpy pytesseract opencv-python
 ```
 Install the [Tesseract Engine](https://github.com/tesseract-ocr/tesseract/wiki) (and add the directory to PATH if on Windows)
 

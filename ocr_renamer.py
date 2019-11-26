@@ -18,7 +18,11 @@ threshold = 0.9 # threshold for template match to be accepted - need to tune
 
 # setup templates
 template_D = cv2.imread('Templates/D.png', 0) # flag 0 for grayscale image
+if template_D is None:
+    raise FileNotFoundError("Templates/D.png could not be found")
 template_V = cv2.imread('Templates/V.png', 0)
+if template_V is None:
+    raise FileNotFoundError("Templates/V.png could not be found")
 
 def filter_text(imgtext):
     """"
