@@ -1,9 +1,13 @@
-# pytesseract
-Image renamer using Tesseract OCR
+# Image Renamer thingy
+Image renamer using Tesseract OCR and template matching
 
-Finds the relevant string in the image and uses it to rename the image  
+Finds the relevant string in the image and uses it to rename the image:  
 
-(Written to help label a butterfly collection)  
+![alt text](https://github.com/jwpleow/pytesseract_imagerenamer/blob/master/docs/example.jpg "Example Image")  
+-> Renames image to ZRC_ENT00004017 V.CR2  
+(Uses Tesseract to grab the long string and OpenCV's template matching to match the V)  
+
+Written to help label a butterfly collection
 
 ### How to use
 Download [Anaconda](https://www.anaconda.com/distribution/)  

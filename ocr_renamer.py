@@ -3,19 +3,14 @@ import pytesseract
 import os
 import rawpy # to read raw images
 import re
-import logging
 import time
 import cv2 #pip install opencv-python
 import numpy as np
-from multiprocessing import Lock, Pool, Manager
-
-# logging.basicConfig(level=logging.DEBUG)
-log = logging.getLogger(__name__)
-start = time.time()
+from multiprocessing import Lock, Pool, Manager, Value
 
 ### Modify the variables here ###
 FileExtension = ".CR2" # File extension of the image
-threshold = 0.9 # threshold for template match to be accepted - need to tune
+threshold = 0.9 # threshold for template match to be accepted
 
 # setup templates
 template_D = cv2.imread('Templates/D.png', 0) # flag 0 for grayscale image
@@ -35,11 +30,9 @@ def filter_text(imgtext):
     search_pattern = "[A-Z]{3}_[A-Z]{3}([0-9O]){8}"  # accept false O's in the last bit too, and change it later to 0's 
     match = re.search(search_pattern,imgtext)
     if match:
-        log.debug("Match found!")
         text = match.group(0) # get the string from the match object - what if there are multiple matches? hmm
         if 'O' in text[7:15]: #replace any O's with 0's
             text = text[0:7] + text[7:15].replace('O','0')
-            log.debug("Replaced O's with 0's")
         return text
     else:
         return None
@@ -47,6 +40,8 @@ def filter_text(imgtext):
 
 def rename_img(filename, text, dorsal_ventral):
     global FileExtension
+    global renamed_file_counter
+    renamed_file_counter.value += 1
     """" This function renames the image to its label + D/V/A + <number if filename is taken> """
     if not (f"{text} {dorsal_ventral}{FileExtension}") in os.listdir(os.getcwd()): #check if new file name already exists
         os.rename(filename, f"{text} {dorsal_ventral}{FileExtension}")
@@ -89,18 +84,18 @@ def match_template(img):
     elif flag_V == True:
         ret = "V"
     else:
-        print("Neither D nor V was detected!")
+        # print("Neither D nor V was detected!")
         ret = "A"
     
     return ret
 
 def process_image(filename):
-    print(f"Looking at file: {filename}", flush=True)
+    # print(f"Looking at file: {filename}", flush=True)
     with rawpy.imread(filename) as raw_image: #with so that the file is closed after reading
         rgb = raw_image.postprocess() # return a numpy array
     img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR) # convert into openCV image
     text_found = 0
-    for width in range(600,701,100): # Try a few different image sizes until OCR detects a long enough string
+    for width in range(600,2201,100): # Try a few different image sizes until OCR detects a long enough string
         img_resized = resize_img(img, width)
         # PyTesseract only seems to accept PIL image formats
         imgtext=pytesseract.image_to_string(Image.fromarray(img_resized), config='--psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') #Get data output and split into list
@@ -114,17 +109,17 @@ def process_image(filename):
             lock.release()
             break
     if text_found == 0:
-        unrenamed_file_list.append(filename)
-        print(f"Unable to find the text for file: {filename}", flush=True)
+        round_one_unrenamed_files.append(filename)
+        # print(f"Unable to find the text for file: {filename}", flush=True)
 
 def process_image_finer(filename):
-    print(f"Looking at file: {filename}", flush=True)
+    # print(f"Looking at file: {filename}", flush=True)
     with rawpy.imread(filename) as raw_image: 
         rgb = raw_image.postprocess() # return a numpy array
     img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR) # convert into openCV image
     text_found = 0
     for width in range(600,3051,50): # Try more and see if we get lucky?
-        if width % 100 != 0 or width > 2401: #only perform for sizes not already tried
+        if width % 100 != 0 or width > 2101: #only perform for sizes not already tried
             img_resized = resize_img(img, width)
             imgtext=pytesseract.image_to_string(Image.fromarray(img_resized), config='--psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') #Get data output and split into list
             text = filter_text(imgtext)
@@ -139,39 +134,49 @@ def process_image_finer(filename):
                 
         # ## Using a different config on pytesseract seems to cause no output suddenly?? (or was this already the case?) Find out why
         # imgtext=pytesseract.image_to_string(img) #Get data output and split into list
-        # log.debug(str(basewidth) + " noconfig width text read is: \n" + imgtext)
         # text = filter_text(imgtext)
         # if text: 
         #     rename_img(text)
         #     text_found = 1
         #     break
     if text_found == 0:
-        print(f"Still unable to find the text for file: {filename}", flush=True)
+        failed_files.append(filename)
+        # print(f"Still unable to find the text for file: {filename}", flush=True)
 
-def init(l, unrenamed_files): # initialise the global variables into the processor pool
+def init(l, _round_one_unrenamed_files, _failed_files, _renamed_file_counter): # initialise the global variables into the processor pool
     global lock
-    global unrenamed_file_list
+    global round_one_unrenamed_files
+    global renamed_file_counter
+    global failed_files
     lock = l
-    unrenamed_file_list = unrenamed_files
+    round_one_unrenamed_files = _round_one_unrenamed_files
+    renamed_file_counter = _renamed_file_counter
+    failed_files = _failed_files
 
 if __name__ == '__main__':
     start = time.time()
+    print("Looking at images...", flush=True)
     l = Lock()
     manager = Manager()
-    unrenamed_files = manager.list() # to hold a shared list of unrenamed files
+    _round_one_unrenamed_files = manager.list() # holds shared list of unrenamed files during first round of processing
+    _failed_files = manager.list() # holds shared list of files that could not be renamed after all processing
+    _renamed_file_counter = Value('i', 0)
     directory = os.getcwd()
     files = [filename for filename in sorted(os.listdir(directory)) if filename.endswith(FileExtension)]
-    pool = Pool(initializer=init, initargs=(l, unrenamed_files))
+    no_of_files = len(files)
+
+    pool = Pool(initializer=init, initargs=(l, _round_one_unrenamed_files, _failed_files, _renamed_file_counter))
     pool.map(process_image, files)
+
+    if _round_one_unrenamed_files:
+        print("Trying further steps on files that could not be renamed:", flush=True)
+        # print(_round_one_unrenamed_files, flush=True)
+        pool.map(process_image_finer, _round_one_unrenamed_files)
+
     pool.close()
     pool.join()
 
-    if unrenamed_files:
-        print("Trying further steps on files that could not be renamed:", flush=True)
-        print(unrenamed_files, flush=True)
-        pool = Pool(initializer=init, initargs=(l, unrenamed_files))
-        pool.map(process_image_finer, unrenamed_files)
-        pool.close()
-        pool.join()
-
-    print(f"The script ran for {time.time() - start} s")
+    print(f"The script took {(time.time() - start):.1f}s to rename {_renamed_file_counter.value} out of {no_of_files} files.")
+    if _failed_files:
+        print(f"The files that could not be renamed are:")
+        print(_failed_files)
