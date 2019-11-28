@@ -27,7 +27,8 @@ def filter_text(imgtext):
     Returns the string if found, else returns None 
     """
     # Search pattern is of the form: <3 capital alphabets>_<3 capital alphabets><8 digits>      e.g. ZRC_ENT00009431
-    search_pattern = "[A-Z]{3}_[A-Z]{3}([0-9O]){8}"  # accept false O's in the last bit too, and change it later to 0's 
+    search_pattern = r"\b[A-Z]{3}_[A-Z]{3}([0-9O]){8}\b"  # accept false O's in the last bit too, and change it later to 0's 
+    # search_pattern = r"[A-Z]{3}_[A-Z]{3}([0-9O]){4}([1-9])([0-9O]){3}\b" # modified search pattern to reject 0's in the 5th number
     match = re.search(search_pattern,imgtext)
     if match:
         text = match.group(0) # get the string from the match object - what if there are multiple matches? hmm
@@ -103,7 +104,7 @@ def process_image(filename):
         if text: 
             text_found = 1
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) # convert to grayscale for template matching
-            result = match_template(gray) # use openCV template to find if dorsal or ventral
+            result = match_template(gray) # use openCV template to find if D or V template detected
             lock.acquire()
             rename_img(filename, text, result)
             lock.release()
@@ -126,7 +127,7 @@ def process_image_finer(filename):
             if text: 
                 text_found = 1
                 gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) # convert to grayscale for template matching
-                result = match_template(gray) # use openCV template to find if dorsal or ventral
+                result = match_template(gray) # use openCV template to find if D or V template detected
                 lock.acquire()
                 rename_img(filename, text, result)
                 lock.release()
@@ -162,14 +163,14 @@ if __name__ == '__main__':
     _failed_files = manager.list() # holds shared list of files that could not be renamed after all processing
     _renamed_file_counter = Value('i', 0)
     directory = os.getcwd()
-    files = [filename for filename in sorted(os.listdir(directory)) if filename.endswith(FileExtension)]
+    files = [filename for filename in sorted(os.listdir(directory)) if filename.endswith(FileExtension) and not filename.startswith('ZRC_ENT')]
     no_of_files = len(files)
 
     pool = Pool(initializer=init, initargs=(l, _round_one_unrenamed_files, _failed_files, _renamed_file_counter))
     pool.map(process_image, files)
 
     if _round_one_unrenamed_files:
-        print("Trying further steps on files that could not be renamed:", flush=True)
+        print("Trying further steps on files that could not be renamed...", flush=True)
         # print(_round_one_unrenamed_files, flush=True)
         pool.map(process_image_finer, _round_one_unrenamed_files)
 
