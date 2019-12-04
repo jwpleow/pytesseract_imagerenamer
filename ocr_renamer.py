@@ -105,7 +105,7 @@ for filename in sorted(os.listdir(directory)): #iterate over every file
         for width in range(600,2501,100): # Try a few different image sizes until OCR detects a long enough string
             img_resized = resize_img(img, width)
             # PyTesseract only seems to accept PIL image formats
-            imgtext=pytesseract.image_to_string(Image.fromarray(img_resized), config='--psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') #Get data output and split into list
+            imgtext=pytesseract.image_to_string(Image.fromarray(img_resized), config='--psm 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') #Get data output and split into list
             log.debug(f"For the {width}-width image, text read is: \n {imgtext}")
             text = filter_text(imgtext)
             if text: 
@@ -132,7 +132,7 @@ if unrenamed_files:
                 if width % 100 != 0 or width > 2401: #only perform for sizes not already tried
                     img_resized = resize_img(img, width)
                     # PyTesseract only seems to accept PIL image formats?
-                    imgtext=pytesseract.image_to_string(Image.fromarray(img_resized), config='--psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') #Get data output and split into list
+                    imgtext=pytesseract.image_to_string(Image.fromarray(img_resized), config='--psm 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') #Get data output and split into list
                     log.debug(f"For the {width}-width image, text read is: \n {imgtext}")
                     text = filter_text(imgtext)
                     if text: 
