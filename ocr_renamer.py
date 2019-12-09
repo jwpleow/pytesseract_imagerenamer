@@ -117,6 +117,7 @@ def process_image(filename):
             template_result = match_template(img_gray) 
             if template_result[1] > threshold:
                 template_found = template_result[0]
+                img = img[int(img.shape[0]/2):img.shape[0]]  # crop away the top half of the image after template is found
                 # print(f"template found for {filename} at width {width} with coeff: {template_result[1]}",flush=True)
 
         # set the label if it has been found twice
