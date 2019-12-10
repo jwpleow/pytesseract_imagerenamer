@@ -7,6 +7,7 @@ Multiscale template matching taken from https://www.pyimagesearch.com/2015/01/26
 from PIL import Image
 import pytesseract
 import os
+import sys
 import rawpy # to read raw images
 import re
 import time
@@ -84,65 +85,68 @@ def match_template(img):
         return ['V', val_V]
 
 def process_image(filename):
-    
-    # Get openCV image from the raw image
-    with rawpy.imread(filename) as raw_image:
-        rgb = raw_image.postprocess()  # returns a numpy array
-    img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)  # convert into the correct colour for cv2
+    try:
+        # Get openCV image from the raw image
+        with rawpy.imread(filename) as raw_image:
+            rgb = raw_image.postprocess()  # returns a numpy array
+        img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)  # convert into the correct colour for cv2
 
-    # initialise some variables to keep track of things found
-    renamed_flag = 0
-    label_found = None  # to hold the finalised label
-    labels_found = []  # stores the labels found (e.g. ZRC_ENT0004098), needs to have 2 similar hits before accepting
-    template_found = None  # to store the D/V string if threshold is reached
-    starting_width = 600
-    ending_width = 6000
-    """ Use only bottom half of image for label finding, and right side of image for template matching!!"""
-    # Try a few different image sizes until OCR detects a matching string
-    for width in range(starting_width, ending_width + 1, 100): 
-        text = None
-        img_resized = resize_img(img, width)
-        img_gray = cv2.cvtColor(img_resized, cv2.COLOR_BGR2GRAY)  # convert to grayscale for template matching
+        # initialise some variables to keep track of things found
+        renamed_flag = 0
+        label_found = None  # to hold the finalised label
+        labels_found = []  # stores the labels found (e.g. ZRC_ENT0004098), needs to have 2 similar hits before accepting
+        template_found = None  # to store the D/V string if threshold is reached
+        starting_width = 600
+        ending_width = 6000
+        """ Use only bottom half of image for label finding, and right side of image for template matching!!"""
+        # Try a few different image sizes until OCR detects a matching string
+        for width in range(starting_width, ending_width + 1, 100): 
+            text = None
+            img_resized = resize_img(img, width)
+            img_gray = cv2.cvtColor(img_resized, cv2.COLOR_BGR2GRAY)  # convert to grayscale for template matching
 
-        # do some OCR to find the label...
-        if not label_found:
-            # PyTesseract only seems to accept PIL image formats...
-            img_text=pytesseract.image_to_string(Image.fromarray(img_resized), config='--psm 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') #Get data output and split into list
-            text = filter_text(img_text)
-            if text:
-                labels_found.append(text)
+            # do some OCR to find the label...
+            if not label_found:
+                # PyTesseract only seems to accept PIL image formats...
+                img_text=pytesseract.image_to_string(Image.fromarray(img_resized), config='--psm 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') #Get data output and split into list
+                text = filter_text(img_text)
+                if text:
+                    labels_found.append(text)
 
-        # find the template only for every other width
-        if not template_found and width % 200 == 0:        
-            template_result = match_template(img_gray) 
-            if template_result[1] > threshold:
-                template_found = template_result[0]
-                img = img[int(img.shape[0]/2):img.shape[0]]  # crop away the top half of the image after template is found
-                # print(f"template found for {filename} at width {width} with coeff: {template_result[1]}",flush=True)
+            # find the template only for every other width
+            if not template_found and width % 200 == 0:        
+                template_result = match_template(img_gray) 
+                if template_result[1] > threshold:
+                    template_found = template_result[0]
+                    img = img[int(img.shape[0]/2):img.shape[0]]  # crop away the top half of the image after template is found
+                    # print(f"template found for {filename} at width {width} with coeff: {template_result[1]}",flush=True)
 
-        # set the label if it has been found twice
-        if text in labels_found and not label_found: # this occurs only if text is found twice
-            label_found = text
-            # print(f"label found for {filename} at width {width}", flush=True)
+            # set the label if it has been found twice
+            if text in labels_found and not label_found: # this occurs only if text is found twice
+                label_found = text
+                # print(f"label found for {filename} at width {width}", flush=True)
 
-        # at the end of the loop
-        if width == ending_width: 
-            if len(labels_found) == 1:
-                label_found = labels_found[0]
-            if label_found and not template_found:
-                rename_img(filename, label_found, 'A')
+            # at the end of the loop
+            if width == ending_width: 
+                if len(labels_found) == 1:
+                    label_found = labels_found[0]
+                if label_found and not template_found:
+                    rename_img(filename, label_found, 'A')
+                    renamed_flag = 1
+                    break
+
+            # rename and break loop if both have been found
+            if label_found and template_found:
+                rename_img(filename, label_found, template_found)
                 renamed_flag = 1
                 break
 
-        # rename and break loop if both have been found
-        if label_found and template_found:
-            rename_img(filename, label_found, template_found)
-            renamed_flag = 1
-            break
+        if renamed_flag == 0:
+            unrenamed_files.append(filename)
+            # print(f"Unable to find the text for file: {filename}", flush=True)
 
-    if renamed_flag == 0:
-        unrenamed_files.append(filename)
-        # print(f"Unable to find the text for file: {filename}", flush=True)
+    except KeyboardInterrupt:
+        pass
 
 def init(l, _unrenamed_files, _renamed_file_counter): # initialise the global variables into the processor pool
     global lock
@@ -164,7 +168,13 @@ if __name__ == '__main__':
     no_of_files = len(files)
 
     pool = Pool(initializer=init, initargs=(l, _unrenamed_files, _renamed_file_counter))
-    pool.map(process_image, files)
+    try:
+        pool.map_async(process_image, files).get(9999)
+    except KeyboardInterrupt:
+        pool.terminate()
+        pool.join()
+        print("Shutting down program...")
+        sys.exit(1)
     pool.close()
     pool.join()
 
