@@ -14,6 +14,9 @@ import time
 import cv2 #pip install opencv-python
 import numpy as np
 from multiprocessing import Lock, Pool, Manager, Value
+from functools import partial
+
+print = partial(print, flush=True) # make all my prints flush immediately because git bash...
 
 ### Modify the variables here ###
 FileExtension = ".CR2" # File extension of the image
@@ -53,13 +56,13 @@ def rename_img(filename, text, dorsal_ventral):
     """" This function renames the image to its label + D/V/A + <number if filename is taken> """
     if not (f"{text} {dorsal_ventral}{FileExtension}") in os.listdir(os.getcwd()): #check if new file name already exists
         os.rename(filename, f"{text} {dorsal_ventral}{FileExtension}")
-        print(f"Renaming {filename} to {text} {dorsal_ventral}{FileExtension}", flush=True)
+        print(f"Renaming {filename} to {text} {dorsal_ventral}{FileExtension}")
     else:
         n = 1
         while (f"{text} {dorsal_ventral}({n}){FileExtension}") in os.listdir(os.getcwd()):
             n += 1
         os.rename(filename, f"{text} {dorsal_ventral}({n}){FileExtension}")
-        print(f"Renaming {filename} to {text} {dorsal_ventral}({n}){FileExtension}", flush=True)
+        print(f"Renaming {filename} to {text} {dorsal_ventral}({n}){FileExtension}")
     lock.release()
     return
 
@@ -118,13 +121,15 @@ def process_image(filename):
                 template_result = match_template(img_gray) 
                 if template_result[1] > threshold:
                     template_found = template_result[0]
-                    img = img[int(img.shape[0]/2):img.shape[0]]  # crop away the top half of the image after template is found
-                    # print(f"template found for {filename} at width {width} with coeff: {template_result[1]}",flush=True)
+                    # crop part of the image after template is found
+                    img = img[int(img.shape[0]/2):img.shape[0],
+                                   0:int(3*img.shape[1]/4)]
+                    # print(f"template found for {filename} at width {width} with coeff: {template_result[1]}")
 
             # set the label if it has been found twice
             if text in labels_found and not label_found: # this occurs only if text is found twice
                 label_found = text
-                # print(f"label found for {filename} at width {width}", flush=True)
+                # print(f"label found for {filename} at width {width}")
 
             # at the end of the loop
             if width == ending_width: 
@@ -143,7 +148,7 @@ def process_image(filename):
 
         if renamed_flag == 0:
             unrenamed_files.append(filename)
-            # print(f"Unable to find the text for file: {filename}", flush=True)
+            # print(f"Unable to find the text for file: {filename}")
 
     except KeyboardInterrupt:
         pass
@@ -158,7 +163,7 @@ def init(l, _unrenamed_files, _renamed_file_counter): # initialise the global va
 
 if __name__ == '__main__':
     start = time.time()
-    print("Looking at images...", flush=True)
+    print("Looking at images...")
     l = Lock()
     manager = Manager()
     _unrenamed_files = manager.list() # holds shared list of unrenamed files during first round of processing
@@ -169,7 +174,7 @@ if __name__ == '__main__':
 
     pool = Pool(initializer=init, initargs=(l, _unrenamed_files, _renamed_file_counter))
     try:
-        pool.map_async(process_image, files).get(9999)
+        pool.map_async(process_image, files).get(99999)
     except KeyboardInterrupt:
         pool.terminate()
         pool.join()

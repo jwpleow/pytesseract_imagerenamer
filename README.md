@@ -1,21 +1,21 @@
-# Image Renamer thingy
-Image renamer using Tesseract OCR and template matching
+# Image Renamer thing
 
-Finds the relevant string in the image and uses it to rename the image:  
+Image renamer using Tesseract OCR and template matching. Written to help label a butterfly collection.
 
-![alt text](https://github.com/jwpleow/pytesseract_imagerenamer/blob/master/docs/example.jpg "Example Image")  
+Finds the relevant string and label in the image and uses it to rename the image:  
+
+![alt text](https://github.com/jwpleow/pytesseract_imagerenamer/blob/master/docs/pic.jpg "Example Image")  
 -> Renames image to ZRC_ENT00004017 V.CR2  
-(Uses Tesseract to grab the long string and OpenCV's template matching to match the V)  
 
-Written to help label a butterfly collection
+
 
 ### How to use
 Download [Anaconda](https://www.anaconda.com/distribution/)  
-In your preferred shell/terminal:
+In command/anaconda prompt or your preferred CLI:
 ```
 pip install rawpy pytesseract opencv-python
 ```
-Install the [Tesseract Engine](https://github.com/tesseract-ocr/tesseract/wiki) (and add the directory to PATH if on Windows)
+Install the [Tesseract Engine](https://github.com/tesseract-ocr/tesseract/wiki) (and add the directory to PATH if on Windows - e.g. C:\Program Files\Tesseract-OCR)
 
 Place the python script in the directory with the image files, and run it:
 ```
