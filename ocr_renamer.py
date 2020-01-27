@@ -8,27 +8,29 @@ from PIL import Image
 import pytesseract
 import os
 import sys
-import rawpy # to read raw images
+import rawpy  # to read raw images
 import re
 import time
-import cv2 #pip install opencv-python
+import cv2  # pip install opencv-python
 import numpy as np
 from multiprocessing import Lock, Pool, Manager, Value
 from functools import partial
 
-print = partial(print, flush=True) # make all my prints flush immediately because git bash...
+# make all my prints flush immediately because git bash...
+print = partial(print, flush=True)
 
 ### Modify the variables here ###
-FileExtension = ".CR2" # File extension of the image
-threshold = 0.8 # threshold for template match to be accepted
+FileExtension = ".CR2"  # File extension of the raw image (if it's not a raw image go change the code in process_image)
+threshold = 0.8  # threshold for template match to be accepted
 
 # setup templates
-template_D = cv2.imread('Templates/D.png', 0) # flag 0 for grayscale image
+template_D = cv2.imread('Templates/D.png', 0)  # flag 0 for grayscale image
 if template_D is None:
 	raise FileNotFoundError("Templates/D.png could not be found")
 template_V = cv2.imread('Templates/V.png', 0)
 if template_V is None:
 	raise FileNotFoundError("Templates/V.png could not be found")
+
 
 def filter_text(imgtext):
     """
@@ -36,25 +38,26 @@ def filter_text(imgtext):
     Returns the string if found, else returns None 
     """
     # Search pattern is of the form: <3 capital alphabets>_<3 capital alphabets><8 digits>      e.g. ZRC_ENT00009431
-    search_pattern = r"\b[A-Z]{3}_[A-Z]{3}([0-9O]){8}\b"  # accept false O's in the last bit too, and change it later to 0's 
-    # search_pattern = r"[A-Z]{3}_[A-Z]{3}([0-9O]){4}([1-9])([0-9O]){3}\b" # modified search pattern to reject 0's in the 5th number
-    match = re.search(search_pattern,imgtext)
+    # accept false O's in the last bit too, and change it later to 0's
+    search_pattern = r"\b[A-Z]{3}_[A-Z]{3}([0-9O]){8}\b"
+    match = re.search(search_pattern, imgtext)
     if match:
-        text = match.group(0) # get the string from the match object - what if there are multiple matches? hmm
-        if 'O' in text[7:15]: #replace any O's with 0's
-            text = text[0:7] + text[7:15].replace('O','0')
+        text = match.group(0)
+        if 'O' in text[7:15]:  # replace any O's with 0's
+            text = text[0:7] + text[7:15].replace('O', '0')
         return text
     else:
         return None
 
 
 def rename_img(filename, text, dorsal_ventral):
+    """" This function renames the image to its label + D/V/A + <number if filename is taken> """
     global FileExtension
     global renamed_file_counter
     renamed_file_counter.value += 1
     lock.acquire()
-    """" This function renames the image to its label + D/V/A + <number if filename is taken> """
-    if not (f"{text} {dorsal_ventral}{FileExtension}") in os.listdir(os.getcwd()): #check if new file name already exists
+    # check if new file name already exists
+    if not (f"{text} {dorsal_ventral}{FileExtension}") in os.listdir(os.getcwd()):
         os.rename(filename, f"{text} {dorsal_ventral}{FileExtension}")
         print(f"Renaming {filename} to {text} {dorsal_ventral}{FileExtension}")
     else:
@@ -62,15 +65,18 @@ def rename_img(filename, text, dorsal_ventral):
         while (f"{text} {dorsal_ventral}({n}){FileExtension}") in os.listdir(os.getcwd()):
             n += 1
         os.rename(filename, f"{text} {dorsal_ventral}({n}){FileExtension}")
-        print(f"Renaming {filename} to {text} {dorsal_ventral}({n}){FileExtension}")
+        print(
+            f"Renaming {filename} to {text} {dorsal_ventral}({n}){FileExtension}")
     lock.release()
     return
+
 
 def resize_img(img, new_width):
     """ Resize an OpenCV image to a new width, maintaining Aspect Ratio """
     factor = (new_width / float(img.shape[1]))
     new_height = int(img.shape[0] * factor)
-    return cv2.resize(img, (new_width, new_height), interpolation = cv2.INTER_AREA)
+    return cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
+
 
 def match_template(img):
     """ This function tries to match the D or V template images with the img input, 
@@ -87,52 +93,52 @@ def match_template(img):
     else:
         return ['V', val_V]
 
+
 def process_image(filename):
+    """This function looks at the raw image from filename and renames it"""
     try:
         # Get openCV image from the raw image
         with rawpy.imread(filename) as raw_image:
             rgb = raw_image.postprocess()  # returns a numpy array
-        img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)  # convert into the correct colour for cv2
+        # convert into the correct colour for cv2
+        img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
         # initialise some variables to keep track of things found
         renamed_flag = 0
         label_found = None  # to hold the finalised label
-        labels_found = []  # stores the labels found (e.g. ZRC_ENT0004098), needs to have 2 similar hits before accepting
+        labels_found = []  # stores the labels found, needs to have 2 similar hits before accepting
         template_found = None  # to store the D/V string if threshold is reached
         starting_width = 600
         ending_width = 6000
-        """ Use only bottom half of image for label finding, and right side of image for template matching!!"""
-        # Try a few different image sizes until OCR detects a matching string
-        for width in range(starting_width, ending_width + 1, 100): 
+        for width in range(starting_width, ending_width + 1, 100):
             text = None
             img_resized = resize_img(img, width)
-            img_gray = cv2.cvtColor(img_resized, cv2.COLOR_BGR2GRAY)  # convert to grayscale for template matching
+            # convert to grayscale for template matching
+            img_gray = cv2.cvtColor(img_resized, cv2.COLOR_BGR2GRAY)
 
-            # do some OCR to find the label...
             if not label_found:
                 # PyTesseract only seems to accept PIL image formats...
-                img_text=pytesseract.image_to_string(Image.fromarray(img_resized), config='--psm 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') #Get data output and split into list
+                img_text = pytesseract.image_to_string(Image.fromarray(
+                    img_resized), config='--psm 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789')  # Get data output and split into list
                 text = filter_text(img_text)
                 if text:
-                    labels_found.append(text)
+                    # print(f"{text} label found for {filename} at width {width}")
+                    if text in labels_found:
+                        label_found = text
+                    else:
+                        labels_found.append(text)
 
-            # find the template only for every other width
-            if not template_found and width % 200 == 0:        
-                template_result = match_template(img_gray) 
+            # only for every other width as it seems pretty easy
+            if not template_found and width % 200 == 0:
+                template_result = match_template(img_gray)
                 if template_result[1] > threshold:
                     template_found = template_result[0]
                     # crop part of the image after template is found
-                    img = img[int(img.shape[0]/2):img.shape[0],
-                                   0:int(3*img.shape[1]/4)]
+                    img = img[int(img.shape[0]/2):img.shape[0], 0:int(3*img.shape[1]/4)]
                     # print(f"template found for {filename} at width {width} with coeff: {template_result[1]}")
 
-            # set the label if it has been found twice
-            if text in labels_found and not label_found: # this occurs only if text is found twice
-                label_found = text
-                # print(f"label found for {filename} at width {width}")
-
             # at the end of the loop
-            if width == ending_width: 
+            if width == ending_width:
                 if len(labels_found) == 1:
                     label_found = labels_found[0]
                 if label_found and not template_found:
@@ -140,7 +146,6 @@ def process_image(filename):
                     renamed_flag = 1
                     break
 
-            # rename and break loop if both have been found
             if label_found and template_found:
                 rename_img(filename, label_found, template_found)
                 renamed_flag = 1
@@ -153,7 +158,9 @@ def process_image(filename):
     except KeyboardInterrupt:
         pass
 
-def init(l, _unrenamed_files, _renamed_file_counter): # initialise the global variables into the processor pool
+
+# initialise the global variables into the processor pool
+def init(l, _unrenamed_files, _renamed_file_counter):
     global lock
     global unrenamed_files
     global renamed_file_counter
@@ -161,15 +168,16 @@ def init(l, _unrenamed_files, _renamed_file_counter): # initialise the global va
     unrenamed_files = _unrenamed_files
     renamed_file_counter = _renamed_file_counter
 
+
 if __name__ == '__main__':
     start = time.time()
     print("Looking at images...")
     l = Lock()
     manager = Manager()
-    _unrenamed_files = manager.list() # holds shared list of unrenamed files during first round of processing
+    _unrenamed_files = manager.list()  # holds shared list of unrenamed files during first round of processing
     _renamed_file_counter = Value('i', 0)
     directory = os.getcwd()
-    files = [filename for filename in sorted(os.listdir(directory)) if filename.endswith(FileExtension)] #  and not filename.startswith('ZRC_ENT')
+    files = [filename for filename in sorted(os.listdir(directory)) if filename.endswith(FileExtension)]  # and not filename.startswith('ZRC_ENT')
     no_of_files = len(files)
 
     pool = Pool(initializer=init, initargs=(l, _unrenamed_files, _renamed_file_counter))
