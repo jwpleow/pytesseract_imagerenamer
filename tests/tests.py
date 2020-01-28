@@ -10,7 +10,6 @@ def test_renamed_files_correct():
     directory = os.getcwd()
     files = [filename for filename in os.listdir(
         directory) if filename.endswith(".CR2")]
-    print(files)
-    assert sorted(files) == filenames
+    assert set(files) == set(filenames)
 
 
