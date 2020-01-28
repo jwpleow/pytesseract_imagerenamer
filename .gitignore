@@ -8,3 +8,7 @@
 !docs/
 !docs/**
 !.travis.yml
+!tests/
+!tests/**
+tests/__pycache__
+!requirements.txt

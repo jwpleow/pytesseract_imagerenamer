@@ -1,5 +1,8 @@
 language: python
 
+os:
+  - linux
+  
 addons:
   apt:
     config:
@@ -15,15 +18,19 @@ python:
   - 3.8
 
 before_install:
-  - sudo apt install -y tesseract-ocr
+  - sudo apt-get install -y tesseract-ocr
   - tesseract --version
   - tesseract --list-langs
+  - cd tests
+  - curl gdrive.sh | bash -s https://drive.google.com/drive/folders/1DoBr_uWeRjeId6V3prx8gNVyVJtjrT4c?usp=sharing
+  - mv travis_pytesseract_testimages/* ..
+  - cd ..
 
 install:
   - pip install -r requirements.txt
 
 script:
-  - nosetests -v --with-coverage --cover-tests --cover-package=noseselecttests noseselecttests/tests.py
+  - nosetests tests/tests.py
 
 notifications:
   email: false

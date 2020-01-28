@@ -1,5 +1,5 @@
 # Image Renamer thing
-
+[![Build Status](https://travis-ci.com/jwpleow/pytesseract_imagerenamer.svg?branch=master)](https://travis-ci.com/jwpleow/pytesseract_imagerenamer)
 Image renamer using Tesseract OCR and template matching. Written to help label a butterfly collection.
 
 Finds the relevant string and label in the image and uses it to rename the image:  
