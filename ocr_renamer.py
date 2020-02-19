@@ -177,7 +177,7 @@ if __name__ == '__main__':
     _unrenamed_files = manager.list()  # holds shared list of unrenamed files during first round of processing
     _renamed_file_counter = Value('i', 0)
     directory = os.getcwd()
-    files = [filename for filename in sorted(os.listdir(directory)) if filename.endswith(FileExtension)]  # and not filename.startswith('ZRC_ENT')
+    files = [filename for filename in sorted(os.listdir(directory)) if (filename.endswith(FileExtension) and not filename.startswith('ZRC_ENT'))]
     no_of_files = len(files)
 
     pool = Pool(initializer=init, initargs=(l, _unrenamed_files, _renamed_file_counter))
