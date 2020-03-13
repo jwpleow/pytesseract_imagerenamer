@@ -1,5 +1,5 @@
 """
-This script renames the images in the current working directory by their label (using Tesseract OCR) and D/V tag (using template matching)
+This script renames the .CR2 images in the current working directory by their label (using Tesseract OCR) and D/V tag (using template matching)
 
 Multiscale template matching taken from https://www.pyimagesearch.com/2015/01/26/multi-scale-template-matching-using-python-opencv/
 """
@@ -11,7 +11,7 @@ import sys
 import rawpy  # to read raw images
 import re
 import time
-import cv2  # pip install opencv-python
+import cv2 as cv # pip install opencv-python
 import numpy as np
 from multiprocessing import Lock, Pool, Manager, Value
 from functools import partial
@@ -19,15 +19,15 @@ from functools import partial
 # make all my prints flush immediately because git bash...
 print = partial(print, flush=True)
 
-### Modify the variables here ###
 FileExtension = ".CR2"  # File extension of the raw image (if it's not a raw image go change the code in process_image)
 threshold = 0.8  # threshold for template match to be accepted
 
-# setup templates
-template_D = cv2.imread('Templates/D.png', 0)  # flag 0 for grayscale image
+# load templates
+template_D = cv.imread('Templates/D.png', 0)  # flag 0 for grayscale image
 if template_D is None:
 	raise FileNotFoundError("Templates/D.png could not be found")
-template_V = cv2.imread('Templates/V.png', 0)
+template_D_width = template_D.shape[1]
+template_V = cv.imread('Templates/V.png', 0)
 if template_V is None:
 	raise FileNotFoundError("Templates/V.png could not be found")
 
@@ -57,16 +57,17 @@ def rename_img(filename, text, dorsal_ventral):
     renamed_file_counter.value += 1
     lock.acquire()
     # check if new file name already exists
-    if not (f"{text} {dorsal_ventral}{FileExtension}") in os.listdir(os.getcwd()):
-        os.rename(filename, f"{text} {dorsal_ventral}{FileExtension}")
-        print(f"Renaming {filename} to {text} {dorsal_ventral}{FileExtension}")
+    new_name = f"{text} {dorsal_ventral}{FileExtension}"
+    if not new_name in os.listdir(os.getcwd()):
+        os.rename(filename, new_name)
     else:
         n = 1
-        while (f"{text} {dorsal_ventral}({n}){FileExtension}") in os.listdir(os.getcwd()):
+        new_name = f"{text} {dorsal_ventral}({n}){FileExtension}"
+        while new_name in os.listdir(os.getcwd()):
             n += 1
-        os.rename(filename, f"{text} {dorsal_ventral}({n}){FileExtension}")
-        print(
-            f"Renaming {filename} to {text} {dorsal_ventral}({n}){FileExtension}")
+            new_name = f"{text} {dorsal_ventral}({n}){FileExtension}"
+        os.rename(filename, new_name)
+    print(f"Renaming {filename} to {new_name}")
     lock.release()
     return
 
@@ -75,23 +76,77 @@ def resize_img(img, new_width):
     """ Resize an OpenCV image to a new width, maintaining Aspect Ratio """
     factor = (new_width / float(img.shape[1]))
     new_height = int(img.shape[0] * factor)
-    return cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
+    return cv.resize(img, (new_width, new_height), interpolation=cv.INTER_AREA)
 
 
 def match_template(img):
     """ This function tries to match the D or V template images with the img input, 
-    and returns the highest correlation coefficient along with the corresponding letter
+    and returns the corresponding letter if the threshold is met
     """
-    global template_D
-    global template_V
-    res_D = cv2.matchTemplate(img, template_D, cv2.TM_CCOEFF_NORMED)
-    res_V = cv2.matchTemplate(img, template_V, cv2.TM_CCOEFF_NORMED)
-    val_D = np.amax(res_D)
-    val_V = np.amax(res_V)
-    if val_D > val_V:
-        return ['D', val_D]
-    else:
-        return ['V', val_V]
+
+    # resize images near the template size and hope to find a template match (assuming both templates have same width)
+    for factor in np.arange(1.2, 2, 0.1):
+        gray_img = resize_img(cv.cvtColor(img, cv.COLOR_RGB2GRAY), int(template_D_width * factor))
+        try:
+            res_D = cv.matchTemplate(gray_img, template_D, cv.TM_CCOEFF_NORMED)
+            res_V = cv.matchTemplate(gray_img, template_V, cv.TM_CCOEFF_NORMED)
+            val_D = np.amax(res_D)
+            val_V = np.amax(res_V)
+            if val_D > val_V and val_D > threshold:
+                return 'D'
+            elif val_V > threshold:
+                return 'V'
+        except: # todo: is there a better solution to prevent errors where template is smaller than image?
+            pass
+    return None
+
+
+def get_largest_labels(rgb_image):
+    """ This function gets the largest 3 white labels in the image and returns it
+    """
+    # apply a threshold to only keep the whites
+    img_gray = cv.cvtColor(rgb_image, cv.COLOR_RGB2GRAY)
+    _, thresh = cv.threshold(img_gray, 220, 255, cv.THRESH_BINARY)
+
+    # performing opening and closing to remove unwanted noise - see https://docs.opencv.org/trunk/d9/d61/tutorial_py_morphological_ops.html
+    kernel = np.ones((10, 10))
+    closing = cv.morphologyEx(thresh, cv.MORPH_OPEN, kernel)
+    kernel = np.ones((50, 50))
+    opening = cv.morphologyEx(closing, cv.MORPH_CLOSE, kernel)
+
+    # grab the largest 3 contours and return their images
+    contours, _ = cv.findContours(opening, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+    segmented_imgs = []
+    bgr_image = cv.cvtColor(rgb_image, cv.COLOR_RGB2BGR)
+    for contour in sorted(contours, key=cv.contourArea, reverse=True):
+        left = min(contour[:, 0, 0])
+        right = max(contour[:, 0, 0])
+        top = min(contour[:, 0, 1])
+        bot = max(contour[:, 0, 1])
+
+        segmented_imgs.append(bgr_image[top:bot, left:right])
+
+    return segmented_imgs
+
+def sort_images(images):
+    """ Sorts the images in-place so that the first image in the returned list is the D/V label
+    The D/V label is assumed to be the image found that is relatively square-ish """
+    for index, image in enumerate(images):
+        hw_ratio = image.shape[0] / image.shape[1]
+        if hw_ratio > 0.5 and hw_ratio < 2:
+            if index != 0:
+                images[0], images[index] = images[index], images[0]
+                return images
+
+def stack_images(image1, image2):
+    """stacks the two images vertically"""
+    h1, w1 = image1.shape[:2]
+    h2, w2 = image2.shape[:2]
+    vis = np.zeros((max(h1, h2), w1+w2, 3), np.uint8)
+    vis[:h1, :w1, :3] = image1
+    vis[:h2, w1:w1+w2, :3] = image2
+    return vis
+   
 
 
 def process_image(filename):
@@ -100,58 +155,47 @@ def process_image(filename):
         # Get openCV image from the raw image
         with rawpy.imread(filename) as raw_image:
             rgb = raw_image.postprocess()  # returns a numpy array
-        # convert into the correct colour for cv2
-        img = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
-        # initialise some variables to keep track of things found
-        renamed_flag = 0
+        label_images = get_largest_labels(rgb)
+
+        label_images = sort_images(label_images)
+        # do template matching on the 'squarest' image
+        template_found = match_template(label_images[0])
+
+        # stack the remaining 2 images into 1
+        img = stack_images(label_images[1], label_images[2])
+        # initialise some variables for finding the label TWICE before accepting it
         label_found = None  # to hold the finalised label
-        labels_found = []  # stores the labels found, needs to have 2 similar hits before accepting
-        template_found = None  # to store the D/V string if threshold is reached
-        starting_width = 600
-        ending_width = 6000
+        labels_found = []  # stores the labels found so far
+        starting_width = 300
+        ending_width = 4000
+
         for width in range(starting_width, ending_width + 1, 100):
-            text = None
             img_resized = resize_img(img, width)
-            # convert to grayscale for template matching
-            img_gray = cv2.cvtColor(img_resized, cv2.COLOR_BGR2GRAY)
 
             if not label_found:
                 # PyTesseract only seems to accept PIL image formats...
                 img_text = pytesseract.image_to_string(Image.fromarray(
-                    img_resized), config='--psm 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789')  # Get data output and split into list
+                    img_resized), config='--psm 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') 
                 text = filter_text(img_text)
                 if text:
                     # print(f"{text} label found for {filename} at width {width}")
                     if text in labels_found:
                         label_found = text
+                        break
                     else:
                         labels_found.append(text)
 
-            # only for every other width as it seems pretty easy
-            if not template_found and width % 200 == 0:
-                template_result = match_template(img_gray)
-                if template_result[1] > threshold:
-                    template_found = template_result[0]
-                    # crop part of the image after template is found
-                    img = img[int(img.shape[0]/2):img.shape[0], 0:int(3*img.shape[1]/4)]
-                    # print(f"template found for {filename} at width {width} with coeff: {template_result[1]}")
+        if not label_found and len(labels_found) == 1:  # accept the label even if only found once
+            label_found = labels_found[0]
 
-            # at the end of the loop
-            if width == ending_width:
-                if len(labels_found) == 1:
-                    label_found = labels_found[0]
-                if label_found and not template_found:
-                    rename_img(filename, label_found, 'A')
-                    renamed_flag = 1
-                    break
-
-            if label_found and template_found:
+        if label_found:
+            if template_found:
                 rename_img(filename, label_found, template_found)
-                renamed_flag = 1
-                break
+            else:
+                rename_img(filename, label_found, 'A')
 
-        if renamed_flag == 0:
+        else:
             unrenamed_files.append(filename)
             # print(f"Unable to find the text for file: {filename}")
 
