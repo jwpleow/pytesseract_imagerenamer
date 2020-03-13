@@ -1,7 +1,7 @@
 """
 This script renames the .CR2 images in the current working directory by their label (using Tesseract OCR) and D/V tag (using template matching)
 
-Multiscale template matching taken from https://www.pyimagesearch.com/2015/01/26/multi-scale-template-matching-using-python-opencv/
+long label or label refers to the long string label e.g. ZRC_ENT00004097
 """
 
 from PIL import Image
@@ -21,6 +21,7 @@ print = partial(print, flush=True)
 
 FileExtension = ".CR2"  # File extension of the raw image (if it's not a raw image go change the code in process_image)
 threshold = 0.8  # threshold for template match to be accepted
+CWD = os.getcwd()
 
 # load templates
 template_D = cv.imread('Templates/D.png', 0)  # flag 0 for grayscale image
@@ -51,19 +52,18 @@ def filter_text(imgtext):
 
 
 def rename_img(filename, text, dorsal_ventral):
-    """" This function renames the image to its label + D/V/A + <number if filename is taken> """
-    global FileExtension
+    """ This function renames the image to its long label + D/V/A + (number if filename is taken) + {FileExtension} """
     global renamed_file_counter
     renamed_file_counter.value += 1
     lock.acquire()
     # check if new file name already exists
     new_name = f"{text} {dorsal_ventral}{FileExtension}"
-    if not new_name in os.listdir(os.getcwd()):
+    if not new_name in os.listdir(CWD):
         os.rename(filename, new_name)
     else:
         n = 1
         new_name = f"{text} {dorsal_ventral}({n}){FileExtension}"
-        while new_name in os.listdir(os.getcwd()):
+        while new_name in os.listdir(CWD):
             n += 1
             new_name = f"{text} {dorsal_ventral}({n}){FileExtension}"
         os.rename(filename, new_name)
@@ -128,29 +128,30 @@ def get_largest_labels(rgb_image):
 
     return segmented_imgs
 
+
 def sort_images(images):
-    """ Sorts the images in-place so that the first image in the returned list is the D/V label
-    The D/V label is assumed to be the image found that is relatively square-ish """
+    """ Sorts the images in-place so that the 1st image returned is the D/V label
+    (The D/V label is assumed to be the image found that is relatively square-ish)
+    The 2nd image returned is the remaining image with the smaller area, which should be the long label"""
     for index, image in enumerate(images):
         hw_ratio = image.shape[0] / image.shape[1]
         if hw_ratio > 0.5 and hw_ratio < 2:
             if index != 0:
                 images[0], images[index] = images[index], images[0]
-                return images
+                break
+    return images[0], min(images[1], images[2], key=lambda a: a.size)
 
-def stack_images(image1, image2):
-    """stacks the two images vertically"""
-    h1, w1 = image1.shape[:2]
-    h2, w2 = image2.shape[:2]
-    vis = np.zeros((max(h1, h2), w1+w2, 3), np.uint8)
-    vis[:h1, :w1, :3] = image1
-    vis[:h2, w1:w1+w2, :3] = image2
-    return vis
-   
-
+# def stack_images(image1, image2):
+#     """stacks the two images vertically"""
+#     h1, w1 = image1.shape[:2]
+#     h2, w2 = image2.shape[:2]
+#     vis = np.zeros((h1+h2, max(w1, w2), 3), np.uint8)
+#     vis[:h1, :w1, :3] = image1
+#     vis[h1:h1+h2, :w2, :3] = image2
+#     return vis
 
 def process_image(filename):
-    """This function looks at the raw image from filename and renames it"""
+    """This function looks at the raw image from filename, extracts the 3 white labels, and renames it"""
     try:
         # Get openCV image from the raw image
         with rawpy.imread(filename) as raw_image:
@@ -158,20 +159,19 @@ def process_image(filename):
 
         label_images = get_largest_labels(rgb)
 
-        label_images = sort_images(label_images)
+        D_V_image, label_image = sort_images(label_images)
         # do template matching on the 'squarest' image
-        template_found = match_template(label_images[0])
+        template_found = match_template(D_V_image)
 
-        # stack the remaining 2 images into 1
-        img = stack_images(label_images[1], label_images[2])
+        # # the smaller of the remaining label should be the label
+        # img = stack_images(label_images[1], label_images[2])
+
         # initialise some variables for finding the label TWICE before accepting it
         label_found = None  # to hold the finalised label
         labels_found = []  # stores the labels found so far
-        starting_width = 300
-        ending_width = 4000
-
-        for width in range(starting_width, ending_width + 1, 100):
-            img_resized = resize_img(img, width)
+        img_width = label_image.shape[1]
+        for factor in np.arange(0.2, 2.0, 0.1):
+            img_resized = resize_img(label_image, int(img_width * factor))
 
             if not label_found:
                 # PyTesseract only seems to accept PIL image formats...
@@ -179,7 +179,7 @@ def process_image(filename):
                     img_resized), config='--psm 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') 
                 text = filter_text(img_text)
                 if text:
-                    # print(f"{text} label found for {filename} at width {width}")
+                    # print(f"{text} label found for {filename} at width {int(img_width * factor)}")
                     if text in labels_found:
                         label_found = text
                         break
@@ -220,8 +220,7 @@ if __name__ == '__main__':
     manager = Manager()
     _unrenamed_files = manager.list()  # holds shared list of unrenamed files during first round of processing
     _renamed_file_counter = Value('i', 0)
-    directory = os.getcwd()
-    files = [filename for filename in sorted(os.listdir(directory)) if (filename.endswith(FileExtension) and not filename.startswith('ZRC_ENT'))]
+    files = [filename for filename in sorted(os.listdir(CWD)) if (filename.endswith(FileExtension) and not filename.startswith('ZRC_ENT'))]
     no_of_files = len(files)
 
     pool = Pool(initializer=init, initargs=(l, _unrenamed_files, _renamed_file_counter))
