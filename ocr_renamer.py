@@ -56,8 +56,8 @@ def filter_text(imgtext):
 def rename_img(filename, text, dorsal_ventral):
     """ This function renames the image to its long label + D/V/A + (number if filename is taken) + {FileExtension} """
     global renamed_file_counter
-    renamed_file_counter.value += 1
     lock.acquire()
+    renamed_file_counter.value += 1
     # check if new file name already exists
     new_name = f"{text} {dorsal_ventral}{FileExtension}"
     if not new_name in os.listdir(CWD):
@@ -120,7 +120,7 @@ def get_largest_labels(rgb_image):
     contours, _ = cv.findContours(opening, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
     segmented_imgs = []
     bgr_image = cv.cvtColor(rgb_image, cv.COLOR_RGB2BGR)
-    for contour in sorted(contours, key=cv.contourArea, reverse=True):
+    for contour in sorted(contours, key=cv.contourArea, reverse=True)[:3]:
         left = min(contour[:, 0, 0])
         right = max(contour[:, 0, 0])
         top = min(contour[:, 0, 1])
@@ -138,19 +138,9 @@ def sort_images(images):
     for index, image in enumerate(images):
         hw_ratio = image.shape[0] / image.shape[1]
         if hw_ratio > 0.5 and hw_ratio < 2:
-            if index != 0:
-                images[0], images[index] = images[index], images[0]
-                break
-    return images[0], min(images[1], images[2], key=lambda a: a.size)
+            return image, min(images[(index + 1) % 3], images[(index + 2) % 3], key=lambda a: a.size)
+    return None
 
-# def stack_images(image1, image2):
-#     """stacks the two images vertically"""
-#     h1, w1 = image1.shape[:2]
-#     h2, w2 = image2.shape[:2]
-#     vis = np.zeros((h1+h2, max(w1, w2), 3), np.uint8)
-#     vis[:h1, :w1, :3] = image1
-#     vis[h1:h1+h2, :w2, :3] = image2
-#     return vis
 
 def process_image(filename):
     """This function looks at the raw image from filename, extracts the 3 white labels, and renames it"""
@@ -162,11 +152,9 @@ def process_image(filename):
         label_images = get_largest_labels(rgb)
 
         D_V_image, label_image = sort_images(label_images)
+
         # do template matching on the 'squarest' image
         template_found = match_template(D_V_image)
-
-        # # the smaller of the remaining label should be the label
-        # img = stack_images(label_images[1], label_images[2])
 
         # initialise some variables for finding the label TWICE before accepting it
         label_found = None  # to hold the finalised label
