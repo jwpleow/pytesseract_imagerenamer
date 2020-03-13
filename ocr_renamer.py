@@ -39,13 +39,15 @@ def filter_text(imgtext):
     Returns the string if found, else returns None 
     """
     # Search pattern is of the form: <3 capital alphabets>_<3 capital alphabets><8 digits>      e.g. ZRC_ENT00009431
-    # accept false O's in the last part too, and change it later to 0's
-    search_pattern = r"\b[A-Z]{3}_[A-Z]{3}([0-9O]){8}\b"
+    # accept false O's or 5's in the last part too, and change it to 0's and 5's
+    search_pattern = r"\b[A-Z]{3}_[A-Z]{3}([0-9OS]){8}\b"
     match = re.search(search_pattern, imgtext)
     if match:
         text = match.group(0)
         if 'O' in text[7:15]:  # replace any O's with 0's
             text = text[0:7] + text[7:15].replace('O', '0')
+        if 'S' in text[7:15]:  # replace any S's with 5's
+            text = text[0:7] + text[7:15].replace('S', '5')
         return text
     else:
         return None
