@@ -95,9 +95,9 @@ def match_template(img):
             val_D = np.amax(res_D)
             val_V = np.amax(res_V)
             if val_D > val_V and val_D > threshold:
-                return 'D'
+                return 'Dorsal'
             elif val_V > threshold:
-                return 'V'
+                return 'Ventral'
         except: # todo: is there a better solution to prevent errors where template is smaller than image?
             pass
     return None
@@ -132,7 +132,7 @@ def get_largest_labels(rgb_image):
 
 
 def sort_images(images):
-    """ Sorts the images in-place so that the 1st image returned is the D/V label
+    """ Sorts the images so that the 1st image returned is the D/V label
     (The D/V label is assumed to be the image found that is relatively square-ish)
     The 2nd image returned is the remaining image with the smaller area, which should be the long label"""
     for index, image in enumerate(images):
@@ -143,7 +143,7 @@ def sort_images(images):
 
 
 def process_image(filename):
-    """This function looks at the raw image from filename, extracts the 3 white labels, and renames it"""
+    """This function looks at the raw image from filename, extracts the 3 white labels, and renames it after reading them"""
     try:
         # Get openCV image from the raw image
         with rawpy.imread(filename) as raw_image:
@@ -151,40 +151,47 @@ def process_image(filename):
 
         label_images = get_largest_labels(rgb)
 
-        D_V_image, label_image = sort_images(label_images)
+        label_found = None  # to hold the finalised string label
+        template_found = None
+        
+        images = sort_images(label_images)
 
-        # do template matching on the 'squarest' image
-        template_found = match_template(D_V_image)
+        if images:
+            D_V_image, label_image = images
 
-        # initialise some variables for finding the label TWICE before accepting it
-        label_found = None  # to hold the finalised label
-        labels_found = []  # stores the labels found so far
-        img_width = label_image.shape[1]
-        for factor in np.arange(0.2, 2.0, 0.1):
-            img_resized = resize_img(label_image, int(img_width * factor))
+            # do template matching on the 'squarest' image
+            template_found = match_template(D_V_image)
 
-            if not label_found:
-                # PyTesseract only seems to accept PIL image formats...
-                img_text = pytesseract.image_to_string(Image.fromarray(
-                    img_resized), config='--psm 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') 
-                text = filter_text(img_text)
-                if text:
-                    # print(f"{text} label found for {filename} at width {int(img_width * factor)}")
-                    if text in labels_found:
-                        label_found = text
-                        break
-                    else:
-                        labels_found.append(text)
+            # initialise some variables for finding the label TWICE before accepting it
+            label_found = None  # to hold the finalised label
+            labels_found = []  # stores the labels found so far
+            img_width = label_image.shape[1]
+            for factor in np.arange(0.2, 2.0, 0.1):
+                img_resized = resize_img(label_image, int(img_width * factor))
 
-        if not label_found and len(labels_found) == 1:  # accept the label even if only found once
-            label_found = labels_found[0]
+                if not label_found:
+                    # PyTesseract only seems to accept PIL image formats...
+                    img_text = pytesseract.image_to_string(Image.fromarray(
+                        img_resized), config='--psm 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789') 
+                    text = filter_text(img_text)
+                    if text:
+                        # print(f"{text} label found for {filename} at width {int(img_width * factor)}")
+                        if text in labels_found:
+                            label_found = text
+                            break
+                        else:
+                            labels_found.append(text)
 
-        if label_found:
-            if template_found:
-                rename_img(filename, label_found, template_found)
-            else:
-                rename_img(filename, label_found, 'A')
-
+            if not label_found and len(labels_found) == 1:  # accept the label if only one was found
+                label_found = labels_found[0]
+            
+        if not label_found or not template_found:
+            label_found, template_found = process_image_old(rgb, label_found, template_found)
+        
+        if label_found and template_found:
+            rename_img(filename, label_found, template_found)
+        elif label_found and not template_found:
+            rename_img(filename, label_found, 'A')
         else:
             unrenamed_files.append(filename)
             # print(f"Unable to find the text for file: {filename}")
@@ -193,7 +200,64 @@ def process_image(filename):
         pass
 
 
-# initialise the global variables into the processor pool
+def match_template_old(img):
+    """ This function tries to match the D or V template images with the img input, 
+    and returns the highest correlation coefficient along with the corresponding letter
+    """
+    res_D = cv.matchTemplate(img, template_D, cv.TM_CCOEFF_NORMED)
+    res_V = cv.matchTemplate(img, template_V, cv.TM_CCOEFF_NORMED)
+    val_D = np.amax(res_D)
+    val_V = np.amax(res_V)
+    if val_D > val_V and val_D > threshold:
+        return "Dorsal"
+    elif val_V > threshold:
+        return "Ventral"
+    else:
+        return None
+
+def process_image_old(rgb, label_found, template_found): # fallback to old one if new one fails
+    img = cv.cvtColor(rgb, cv.COLOR_RGB2BGR)
+    # initialise some variables to keep track of things found
+    labels_found = []  # stores the labels found, needs to have 2 similar hits before accepting
+    starting_width = 600
+    ending_width = 6000
+    for width in range(starting_width, ending_width + 1, 100):
+        text = None
+        img_resized = resize_img(img, width)
+        # convert to grayscale for template matching
+        img_gray = cv.cvtColor(img_resized, cv.COLOR_BGR2GRAY)
+
+        if not label_found:
+            # PyTesseract only seems to accept PIL image formats...
+            img_text = pytesseract.image_to_string(Image.fromarray(
+                img_resized), config='--psm 3 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789')  # Get data output and split into list
+            text = filter_text(img_text)
+            if text:
+                # print(f"{text} label found for {filename} at width {width}")
+                if text in labels_found:
+                    label_found = text
+                else:
+                    labels_found.append(text)
+
+        # only for every other width as it seems pretty easy
+        if not template_found and width % 200 == 0:
+            template_result = match_template_old(img_gray)
+            if template_result:
+                template_found = template_result
+                # crop part of the image after template is found
+                img = img[int(img.shape[0]/2):img.shape[0],
+                            0:int(3*img.shape[1]/4)]
+                # print(f"template found for {filename} at width {width} with coeff: {template_result[1]}")
+
+        # at the end of the loop
+        if width == ending_width:
+            if len(labels_found) == 1:
+                label_found = labels_found[0]
+
+    return label_found, template_found
+
+
+# to initialise the global variables into the processor pool
 def init(l, _unrenamed_files, _renamed_file_counter):
     global lock
     global unrenamed_files

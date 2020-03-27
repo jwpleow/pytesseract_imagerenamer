@@ -3,7 +3,7 @@
 
 Image renamer using Tesseract OCR and template matching. Written to help label a butterfly collection.
 
-Finds the relevant string and label in the image and uses it to rename the image:  
+First applies a threshold to isolate the white labels, and then reads them to rename the image:  
 
 ![alt text](https://github.com/jwpleow/pytesseract_imagerenamer/blob/master/docs/pic.jpg "Example Image")  
 -> Renames image to ZRC_ENT00004017 V.CR2  
