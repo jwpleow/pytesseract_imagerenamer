@@ -28,11 +28,11 @@ jobs:
         pip install nose pytest
         sudo apt-get install -y tesseract-ocr
     - name: Download dataset
-    - name: Test on sample dataset
       run: |
         cd tests
         curl gdrive.sh | bash -s https://drive.google.com/drive/folders/1DoBr_uWeRjeId6V3prx8gNVyVJtjrT4c?usp=sharing
         mv travis_pytesseract_testimages/* ..
         cd ..
-        nosetests
+    - name: Test on sample dataset
+      run: nosetests
         
