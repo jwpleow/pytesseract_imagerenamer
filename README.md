@@ -1,4 +1,4 @@
-# Image Renamer thing [![Build Status](https://travis-ci.com/jwpleow/pytesseract_imagerenamer.svg?branch=master)](https://travis-ci.com/jwpleow/pytesseract_imagerenamer)  [![](https://img.shields.io/badge/python-3.6+-blue.svg)](https://www.python.org/download/releases/3.6.0/)
+# Butterfly Image Renamer ![Build Status](https://github.com/jwpleow/pytesseract_imagerenamer/actions/workflows/test.yml/badge.svg) [![](https://img.shields.io/badge/python-3.6+-blue.svg)](https://www.python.org/download/releases/3.6.0/)
 
 
 Image renamer using Tesseract OCR and template matching. Written to help label a butterfly collection.
