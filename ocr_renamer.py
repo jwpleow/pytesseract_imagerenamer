@@ -149,8 +149,8 @@ def process_image(filename):
     try:
         # Get openCV image from the raw image, and process into expected format
         with rawpy.imread(filename) as raw_image:
-            rgb_temp = raw_image.postprocess()  # returns a numpy array
-        rgb = cv.cvtColor(rgb_temp, cv.COLOR_RGB2BGR)
+            rgb = raw_image.postprocess()  # returns a numpy array, and we leave it in RGB format
+        # rgb = cv.cvtColor(rgb_temp, cv.COLOR_RGB2BGR)
         rgb = cv.transpose(rgb)
         rgb = cv.flip(rgb, 1)
 
